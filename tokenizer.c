@@ -13,6 +13,7 @@
  *
  * @param string the string that will be tokenized.  Should be non-NULL.
  * @return an initialized string tokenizer on success, NULL on error.
+ * just a quick edit
  */
 TOKENIZER *init_tokenizer( char *string )
 {
