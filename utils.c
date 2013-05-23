@@ -47,19 +47,29 @@ int myStrCmp(const char *d, const char *s) {
 }
 
 char *getInput(int bufSize) {
-    char *string;
+    char *string, *tmp;
     char buf[bufSize];
     int br, i, j;
 
     string = (char *) malloc(1);
+    if (string == NULL) 
+        perror("string init");
+    
     string[0] = '\0';
-    int m = myStrLen(string);
-    write( STDOUT_FILENO, "gort-> ", 7);
+    write( STDOUT_FILENO, "gort-> ", 7);  /* output prompt */
     while ((br = read( STDIN_FILENO, buf, bufSize )) > 0) {
       if (br <= 1 && myStrLen(string) == 0)
         continue;
       else if (br == bufSize && buf[br-1] != '\n') {
-          string = (char *) realloc(string, bufSize + myStrLen(string));
+          tmp = (char *) realloc(string, bufSize + myStrLen(string));
+          if (tmp == NULL) {
+              perror("realloc");
+              exit(0);
+          } 
+          else {
+              string = tmp;
+          }
+          
           for ( i = 0 ,j = myStrLen(string); i < bufSize; i++, j++) {
               string[j] = buf[i];
           }
@@ -67,10 +77,31 @@ char *getInput(int bufSize) {
           continue;
       } else {
           buf[br-1] = '\0';
-          string = (char *) realloc(string, myStrLen(buf)+myStrLen(string));
+          tmp = (char *) realloc(string, myStrLen(buf)+myStrLen(string));
+          if (tmp == NULL) {
+              perror("realloc");
+              exit(0);
+          }
+          else {
+              string = tmp;
+          }
           myStrCat(string, buf);
       }
       return string;
     }
     return string;
 }
+
+char **setUpCmd( char **arg, char *s) {
+    char **a = *arg;
+    while(*a != NULL) *a++;
+    
+    a = (char *) malloc(myStrLen(s));
+    if (a == NULL) {
+        perror("malloc");
+        exit(0);
+    }
+    
+    return a;
+}
+
