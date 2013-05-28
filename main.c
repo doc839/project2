@@ -8,6 +8,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include "tokenizer.h"
 #include "utils.h"
 
@@ -22,16 +26,21 @@ pid_t childPID = -1;
 int main(int argc, char** argv) {
 
   TOKENIZER *tokenizer;
+  struct cmdList *cmdPtr;
   char *string;
   char *tok;
   char **args;
   char *stdOutFile = NULL;
   char *stdInFile = NULL;
+  int rdStdIn = -1;
+  int rdStdOut = -1;
+  int sErrorNo;
   int i;
-
+  
   while(1) {
         
-    string = getInput(BUF_SIZE);
+    sErrorNo = 0;               // set initial error condition to 0 (No errors)  
+    string = getInput(BUF_SIZE);  // get user input
     
     if(myStrCmp(string, "exit") == 0) {
         free(string);
@@ -39,7 +48,7 @@ int main(int argc, char** argv) {
     }
     
     /* set args array */
-    args = malloc(CMDSIZE * sizeof(char*));
+    args = malloc(CMDSIZE * sizeof(char *));
     if (args == NULL) {
         perror("malloc");
         exit(0);
@@ -73,7 +82,15 @@ int main(int argc, char** argv) {
                 }
                 break;
             case'|':
-                printf("Got |\n");
+                addArgsList(args);  // add previous set of arguments to list
+                
+                /* set args array */
+                args = malloc(CMDSIZE * sizeof(char *));
+                if (args == NULL) {
+                    perror("malloc");
+                    exit(0);
+                }
+                i = 0;          // reset index for args list
                 break;
             case '&':
                 printf("Got &\n");
@@ -95,41 +112,60 @@ int main(int argc, char** argv) {
     free_tokenizer( tokenizer ); /* free memory */
     free(string);
     
-    switch(childPID = fork()) {
-        case -1:
-            perror("fork");
-            exit(0);
-        case 0:
-             execvp(args[0], args);
-             perror("execvp");
-             exit(0);
-             break;
-        default:
-            wait();
-            break;
+    addArgsList(args);
+    cmdPtr = cmdsHead;
+    
+    // Setup redirection of stdin and stdout
+    if (stdInFile != NULL) {
+        rdStdIn = open(stdInFile, O_RDONLY);
+        if (rdStdIn == -1) {
+            sErrorNo = shellError(1);
+        }
+    }
+    
+    if (stdOutFile != NULL) {
+        rdStdOut = open(stdOutFile, O_WRONLY | O_CREAT, 0644);
+        if (rdStdOut == -1) {
+            sErrorNo = shellError(2);
+        }
+    }
+    
+    if ( sErrorNo == 0 /*&& cmdsHead->next != NULL*/) {
+        if (rdStdOut != -1) {
+            dup2(rdStdOut, STDOUT_FILENO);
+            close(rdStdOut);
+        }
+        myPipes(cmdPtr, rdStdIn);
+    }
+    else if (sErrorNo == 0) {
+        shellError(9);
     }
     
     /* free memory for args*/
-    for (int j = 0; args[j] != NULL; j++)
-        free(args[j]);
+    cmdPtr = cmdsHead;
+    while (cmdPtr != NULL) {
+        for (int j = 0; cmdPtr->args[j] != NULL; j++) {
+                free(cmdPtr->args[j]);
+        }
+        cmdPtr = cmdPtr->next;
+    }
     
-    free(args);
-    
-    printf("in = %s \n", stdInFile);
-    printf("out = %s \n", stdOutFile);
+    cmdsHead = cmdsCurr = NULL;
     
     /* free standard in and out file names */
     if (stdInFile != NULL) {
         free(stdInFile);
         stdInFile = NULL;
+        rdStdIn = -1;
     }
     if (stdOutFile != NULL) {
         free(stdOutFile);
         stdOutFile = NULL;
+        rdStdOut = -1;
     }
   }
 
   printf( "\nBye!\n" );
-  return 0;			/* all's well that end's well */
+  return 0;
 }
 
