@@ -54,6 +54,7 @@ void jobAdd( int job );
 void createJobsList( int job );
 struct jobList *jobFind( int job );
 int jobDelete( int job );
+void jobPrint();
 
 void myPipes(struct cmdList *cmd, int input);
 int shellError( int choice );

@@ -63,8 +63,10 @@ char *getInput(int bufSize) {
     string[0] = '\0';
     write( STDOUT_FILENO, "gort-> ", 7);  /* output prompt */
     while ((br = read( STDIN_FILENO, buf, bufSize )) > 0) {
-      if (br <= 1 && myStrLen(string) == 0)
-        continue;
+      if (br <= 1 && myStrLen(string) == 0) {
+          write( STDOUT_FILENO, "gort-> ", 7);  /* output prompt */
+          continue;
+      }
       else if (br == bufSize && buf[br-1] != '\n') {
           tmp = (char *) realloc(string, bufSize + myStrLen(string));
           if (tmp == NULL) {
@@ -163,7 +165,7 @@ void createJobsList(int job) {
 /*
  * Routine for adding a new job to the linked list job queue
  */
-void addJob(int job) {
+void jobAdd(int job) {
     
     // see if list has been created
     if (jobHead == NULL) {
@@ -207,17 +209,17 @@ int jobDelete( int job ) {
     struct jobList *ptr;
     
     if ((ptr = jobFind(job)) == NULL) {
-        return -1;
+        return 0;
     }
     
-    if (ptr->prev == NULL && ptr->next == NULL) { /* last member of list */
-        jobHead = jobTail = NULL;
+    if (jobHead == jobTail) { /* last member of list */
         free(ptr);
+        jobHead = jobTail = NULL;
         return 1;
     }
     
     if (ptr->prev == NULL) {  /* ptr is pointing to head of list */
-        ptr->next->prev == NULL;
+        ptr->next->prev = NULL;
         jobHead = ptr->next;
         free(ptr);
         return 1;
@@ -234,6 +236,23 @@ int jobDelete( int job ) {
     ptr->next->prev = ptr->prev;
     free(ptr);
     return 1;
+}
+
+/*
+ * Prints list of jobs
+ */
+void jobPrint() {
+    struct jobList *ptr;
+    
+    if (jobHead == NULL)
+        printf("No jobs in list\n");
+    
+    ptr = jobHead;
+    
+    while (ptr != NULL) {
+        printf("Job: %d\n", ptr->job);
+        ptr = ptr->next;
+    }
 }
 
 /*
@@ -262,7 +281,6 @@ void myPipes(struct cmdList *cmd, int in) {
     if (pf[0] != -1) {
       close(pf[0]);
     }
-    
     execvp(cmd->args[0], cmd->args);
     exit(1);
   }
@@ -273,6 +291,7 @@ void myPipes(struct cmdList *cmd, int in) {
     if (pf[1] != -1) {
       close(pf[1]);
     }
+    jobAdd(pid);
     wait(&status);
     if (cmd->next != NULL) {
       myPipes(cmd->next, pf[0]);
