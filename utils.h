@@ -15,6 +15,7 @@
  * Created my own string functions since we can't use any of
  * the standard c library string functions
  */
+int myAtoi(char *s);
 int myStrLen(char *str);
 char *myStrCat( char *d, const char *s);
 char *myStrCpy(char *d, const char *s);
@@ -56,7 +57,7 @@ struct jobList *jobFind( int job );
 int jobDelete( int job );
 void jobPrint();
 
-void myPipes(struct cmdList *cmd, int input);
+void myPipes(struct cmdList *cmd, int input, pid_t gprd, int fg);
 int shellError( int choice );
 
 

@@ -5,6 +5,40 @@
 #include <sys/wait.h>
 
 #include "utils.h"
+#include "global.h"
+
+
+/*
+ * Function returns integer or 
+ *     -1 if not an number
+ *      0 if number of digits greater that 4
+ * 
+ * Created my own atoi functionality (5 extra credit points)
+ */
+ int myAtoi( char *s )
+ {
+     int i = 0;        // number to be returned
+     int c = 0;        // count of digits in number
+     
+     while( (*s) ) {
+         
+         c++;    // increment count of digits
+         
+        if ( c > 5 )
+            return 0;  //  exceeded limit of digits
+         
+         i = i * 10 ;    // shift digits to the left
+         
+         if ( (*s) > 57 || (*s) < 48)
+            return -1;  // not a positive integer
+            
+        i = i + ( (*s) - 48 );
+
+        s++;
+    }
+    
+    return i;
+}
 
 int myStrLen(char *str) {
     unsigned long count = 0;
@@ -173,18 +207,21 @@ void jobAdd(int job) {
         return;
     }
     
-    struct jobList *ptr = (struct jobList *) malloc( sizeof( struct jobList * ));
-    if ( ptr == NULL) {
-        perror("malloc");
-        exit(1);
+    if (jobFind(job) == NULL) {  /* only add new job if doesn't already exist */
+    
+        struct jobList *ptr = (struct jobList *) malloc( sizeof( struct jobList * ));
+        if ( ptr == NULL) {
+            perror("malloc");
+            exit(1);
+        }
+
+        ptr->job = job;
+        ptr->next = NULL;
+
+        jobTail->next = ptr;
+        ptr->prev = jobTail;
+        jobTail = ptr;
     }
-    
-    ptr->job = job;
-    ptr->next = NULL;
-    
-    jobTail->next = ptr;
-    ptr->prev = jobTail;
-    jobTail = ptr;
 }
 
 /*
@@ -258,7 +295,7 @@ void jobPrint() {
 /*
  *  Recursive fork  
  */
-void myPipes(struct cmdList *cmd, int in) {
+void myPipes(struct cmdList *cmd, int in, pid_t gpid, int fg) {
   int pf[2] = { -1, -1 };
   int status;
   pid_t pid;
@@ -266,8 +303,9 @@ void myPipes(struct cmdList *cmd, int in) {
   if (cmd->next != NULL) {
     pipe(pf);
   }
-  
+          
   if ((pid = fork()) == 0) { /* child */
+      
     if (in != -1) {
       dup2(in, STDIN_FILENO);
       close(in);
@@ -285,16 +323,29 @@ void myPipes(struct cmdList *cmd, int in) {
     exit(1);
   }
   else { /* parent */
+    
     if (in != -1) {
       close(in);
     }
     if (pf[1] != -1) {
       close(pf[1]);
     }
-    jobAdd(pid);
-    wait(&status);
+    
+    if ( gpid == 0 ) {
+        gpid = pid;
+    
+        if (setpgid( pid, gpid ) < 0) {
+            perror("setpgid");
+            exit(1);
+        }
+    }
+    
+    printf("getpgid: %d pgrp: %d  pid %d\n", getpgid(pid), gpid, pid);
+     
+    jobAdd(gpid);
+    
     if (cmd->next != NULL) {
-      myPipes(cmd->next, pf[0]);
+      myPipes(cmd->next, pf[0], gpid, fg);
     }
   }
 }
@@ -311,6 +362,9 @@ int shellError( int choice ) {
             break;
         case 2 :
             myStrCpy(error, "Error opening file for write...\n");
+            break;
+        case 3 :
+            myStrCpy(error, "Invalid use of redirection...");
             break;
         default :
             myStrCpy(error, "Invalid error code\n") ;
