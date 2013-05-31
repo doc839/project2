@@ -9,6 +9,7 @@
 #define	GLOBAL_H
 
 pid_t myShellGpid;
+pid_t fgPid;
 
 
 #endif	/* GLOBAL_H */

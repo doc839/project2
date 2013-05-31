@@ -30,6 +30,7 @@ void createJobsList(  pid_t pid, char *name);
 struct jobList *jobFind( pid_t pid );
 int jobDelete( pid_t pid );
 void jobPrint();
+void jobKill( char *s);
 
 void jobPipes(struct cmdList *cmd, int input, pid_t gprd, int fg);
 

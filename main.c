@@ -28,30 +28,48 @@ void sigHandler( int signal ) {
     int status;
     pid_t pid = waitpid(-1, &status, WNOHANG | WUNTRACED);
     
-    printf("Caught signal %d\n", signal);
     if (signal == SIGCHLD ) {
-       // rtPid = waitpid(-1, &status, WNOHANG | WUNTRACED);
         
-        if (status == 0) {
-            //tcsetpgrp( STDIN_FILENO, myShellGpid);
-            printf("Child %d dead status: %d\n", pid, status);
-            jobDelete(pid);
+        if (WIFEXITED(status)) {
+            tcsetpgrp( 0, myShellGpid);
+            if (pid == -1) {
+                jobDelete(fgPid);
+            }
+            else {
+                jobStatus(pid, 0);
+                jobPrint();
+                write( 1, "gort-> ", 7);
+            }
+        }
+        else if (WIFSIGNALED(status)) {
+            tcsetpgrp( 0, myShellGpid);
+            if (pid == -1) {
+                jobDelete(fgPid);
+            }
+            else {
+                jobStatus(pid, 0);
+                jobPrint();
+                write( 1, "gort-> ", 7);
+            }
+            
+        }
+        else if (WIFSTOPPED(status)) {
+            tcsetpgrp( 0, myShellGpid);
+            jobStatus( pid, 2);
             jobPrint();
+            write( 1, "gort-> ", 7);
         }
     }
     
     if (signal == SIGTSTP) {
-        
-        pid = jobHead->next->pid;
-        killpg( pid, SIGTSTP);
-        printf("Ctrl -Z pid: %d status: %d\n", pid, status);
+        killpg( fgPid, SIGTSTP);
     }
     
-    if (signal == 17 /*SIGUSR2*/) {
-        //pid = waitpid(-1, &status, WNOHANG | WUNTRACED);
-        jobDelete(rtPid);
-        printf("SIGUSR2 pid: %d status: %d\n", pid, status);
+    if (signal == SIGINT) {
+        killpg( fgPid, SIGINT);
+        jobStatus(fgPid, 0);
         jobPrint();
+        write( 1, "gort-> ", 7);
     }
 }
 /*
@@ -59,9 +77,7 @@ void sigHandler( int signal ) {
  */
 int main(int argc, char** argv) {
 
-    TOKENIZER *tokenizer;
-    pid_t pid;
-    
+    TOKENIZER *tokenizer;    
     pid_t gpid;
     struct cmdList *cmdPtr;
     char *string;
@@ -76,7 +92,7 @@ int main(int argc, char** argv) {
     int piped;   // 0 if no pipeline, 1 if there is a pipeline
     int i;
     int fg;
-    
+        
     signal( SIGCHLD, sigHandler);
     signal( SIGINT, sigHandler);
     signal( SIGTSTP, sigHandler);
@@ -85,26 +101,23 @@ int main(int argc, char** argv) {
     // set the shell process group
     myShellGpid = getpgrp();
     jobAdd(myShellGpid, "shell");
-/*
-    if (setpgid( myShellGpid, myShellGpid) < 0 ) {
-        perror("shell process group");
-        exit(1);
-    }
 
-    
-    // Get control
-    tcsetpgrp(STDIN_FILENO, myShellGpid);
-*/
     while (1) {
 
         sErrorNo = 0; // set initial error condition to 0 (No errors)  
         piped = 0;   // set intial pipe status to 0
+        fg = 1;       // set initial state for foreground processing;
         
         string = getInput(BUF_SIZE); // get user input
 
         if (myStrCmp(string, "exit") == 0) {
             free(string);
             exit(0);
+        }
+        
+        if (myStrCmp(string, "jobs") == 0) {
+            jobPrint();
+            continue;
         }
 
         /* set args array */
@@ -118,6 +131,7 @@ int main(int argc, char** argv) {
         tokenizer = init_tokenizer(string);
         i = 0;
         while ((tok = get_next_token(tokenizer)) != NULL) {
+            if (fg == 0) fg = 1;  // & was not at the end of the command
             switch (tok[0]) {
                 case '<':
                     free(tok);
@@ -157,17 +171,26 @@ int main(int argc, char** argv) {
                     piped = 1;
                     break;
                 case '&':
-                    printf("Got &\n");
+                    fg = 0;
                     break;
                 default:
-                    args[i] = (char *) malloc(myStrLen(tok) * sizeof (char));
-                    if (args[i] == NULL) {
-                        perror("malloc");
-                        exit(0);
+                    if (myStrCmp(tok, "kill") == 0) {
+                        free(tok);
+                        if ((tok = get_next_token(tokenizer)) != NULL) {
+                            jobKill(tok);
+                        }
+                        sErrorNo = 10;
                     }
-                    myStrCpy(args[i], tok);
-                    i++;
-                    args[i] = NULL;
+                    else {
+                        args[i] = (char *) malloc(myStrLen(tok) * sizeof (char));
+                        if (args[i] == NULL) {
+                            perror("malloc");
+                            exit(0);
+                        }
+                        myStrCpy(args[i], tok);
+                        i++;
+                        args[i] = NULL;
+                    }
                     break;
             }
 
@@ -196,7 +219,6 @@ int main(int argc, char** argv) {
         
         // initialize group process id to 0
         gpid = 0;
-        fg = 1;
 
         if (sErrorNo == 0 && stdOutFile != NULL) {
             savedStdOut = dup(1);  /* save stdout */
@@ -240,20 +262,7 @@ int main(int argc, char** argv) {
             stdOutFile = NULL;
             rdStdOut = -1;
         }
-        
-        printf("End of Program\n");
-        jobPrint();
-        
-/*
-        while (jobTail->prev != NULL) 
-            jobDelete(jobTail->pid);
-*/
-        
-        //tcsetpgrp( STDIN_FILENO, myShellGpid);
-        
     }
-
-    printf("\nBye!\n");
     return 0;
 }
 

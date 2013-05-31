@@ -8,6 +8,8 @@
 #include "global.h"
 #include "jobs.h"
 
+#define DIGITS 12
+
 
 /*
  * Function returns integer or 
@@ -40,6 +42,32 @@
     
     return i;
 }
+
+ /*
+  * Got this from:
+  * http://www.opensource.apple.com/source/groff/groff-11/groff/libgroff/itoa.c
+  */
+
+char *myItoa( int i)
+{
+  static char buf[DIGITS + 2];
+  char *p = buf + DIGITS + 1;	
+  if (i >= 0) {
+    do {
+      *--p = '0' + (i % 10);
+      i /= 10;
+    } while (i != 0);
+    return p;
+  }
+  else {			
+    do {
+      *--p = '0' - (i % 10);
+      i /= 10;
+    } while (i != 0);
+    *--p = '-';
+  }
+  return p;
+} 
 
 int myStrLen(char *str) {
     unsigned long count = 0;
@@ -89,7 +117,7 @@ char *getInput(int bufSize) {
     char buf[bufSize];
     int br, i, j;
     
-    string = (char *) malloc(1);
+    string = (char *) malloc(bufSize);
     if (string == NULL) {
         perror("string init");
         exit(1);
@@ -103,32 +131,36 @@ char *getInput(int bufSize) {
           continue;
       }
       else if (br == bufSize && buf[br-1] != '\n') {
-          tmp = (char *) realloc(string, bufSize + myStrLen(string));
+          tmp = (char *) malloc(bufSize + myStrLen(string));
           if (tmp == NULL) {
-              perror("realloc");
+              perror("malloc");
               exit(0);
           } 
           else {
-              string = tmp;
+              myStrCpy(tmp, string);
           }
           
           for ( i = 0 ,j = myStrLen(string); i < bufSize; i++, j++) {
-              string[j] = buf[i];
+              tmp[j] = buf[i];
           }
-          string[j] = '\0';
+          tmp[j] = '\0';
+          free(string);
+          string = tmp;
           continue;
       } else {
           buf[br-1] = '\0';
-          tmp = (char *) realloc(string, br+myStrLen(string));
+          tmp = (char *) malloc(br+myStrLen(string));
           if (tmp == NULL) {
-              perror("realloc");
+              perror("malloc");
               exit(0);
           }
           else {
-              string = tmp;
+              myStrCpy(tmp, string);
           }
-          myStrCat(string, buf);
+          myStrCat(tmp, buf);
       }
+      free(string);
+      string = tmp;
       return string;
     }
     return string;
@@ -192,6 +224,9 @@ int shellError( int choice ) {
             break;
         case 3 :
             myStrCpy(error, "Invalid use of redirection...");
+            break;
+        case 10 :
+            return 0;
             break;
         default :
             myStrCpy(error, "Invalid error code\n") ;

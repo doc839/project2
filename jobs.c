@@ -69,7 +69,7 @@ void jobAdd(pid_t pid, char *name) {
         }
 
         ptr->name = myStrCpy(tmp, name);
-        ptr->status = -1;
+        ptr->status = 1; /* runninig */
 
         ptr->next = NULL;
 
@@ -136,16 +136,55 @@ int jobDelete(pid_t pid) {
  * Prints list of jobs
  */
 void jobPrint() {
-    struct jobList *ptr;
+    static char buf[60];
+    struct jobList *ptr; 
+    struct jobList *del;
+    char *fb = "[";
+    char *rb = "]";
+    char *string = buf;
 
-    if (jobHead == NULL)
-        printf("No jobs in list\n");
-
-    ptr = jobHead;
+    ptr = jobHead->next;
 
     while (ptr != NULL) {
-        printf("Job: %d\n", ptr->pid);
+        myStrCpy(string, "\n");
+        myStrCat(string, fb);
+        myStrCat(string, myItoa(ptr->id));
+        myStrCat(string, rb);
+        myStrCat(string, "  ");
+        myStrCat(string, myItoa(ptr->pid));
+        
+        switch(ptr->status) {
+            case 0 :
+                myStrCat(string, " - Done");
+                break;
+            case 1 :
+                myStrCat(string, " - Running");
+                break;
+            case 2 :
+                myStrCat(string, " - Stopped");
+                break;
+            default :
+                myStrCat(string, " - No Status");
+                break;      
+        }
+       
+        write(1, string, myStrLen(string));
         ptr = ptr->next;
+    }
+    
+    write(1, "\n", 1);
+    
+    ptr = jobHead->next;
+    del = NULL;
+    while(ptr != NULL) {
+        if ( ptr->status == 0) {
+            del = ptr;
+        }
+        ptr = ptr->next;
+        if (del != NULL) {
+            jobDelete(del->pid);
+            del = NULL;
+        }
     }
 }
 
@@ -157,6 +196,33 @@ void jobStatus(pid_t pid, int status) {
 
     if ((ptr = jobFind(pid)) != NULL) {
         ptr->status = status;
+    }
+}
+
+/*
+ *  Kill process either by id or pid
+ */
+void jobKill( char *s ) {
+    struct jobList *ptr;
+    char *p;
+    int i;
+    
+    if (*s == '%') {
+        i = myAtoi( ++s );
+        
+        ptr = jobHead;
+        while(ptr != NULL) {
+            if (i == ptr->id) {
+                killpg(ptr->pid, SIGINT);
+                return;
+            }
+            ptr = ptr->next;
+        }
+    }
+    else {
+        i = myAtoi( s );
+        killpg(i, SIGINT);
+        return;
     }
 }
 
@@ -173,7 +239,7 @@ void jobPipes(struct cmdList *cmd, int in, pid_t gpid, int fg) {
     }
 
     if ((pid = fork()) == 0) { /* child */
-
+        
         if (in != -1) {
             dup2(in, STDIN_FILENO);
             close(in);
@@ -187,7 +253,7 @@ void jobPipes(struct cmdList *cmd, int in, pid_t gpid, int fg) {
         if (pf[0] != -1) {
             close(pf[0]);
         }
-
+        
         execvp(cmd->args[0], cmd->args);
         exit(1);
     } else { /* parent */
@@ -205,9 +271,15 @@ void jobPipes(struct cmdList *cmd, int in, pid_t gpid, int fg) {
             perror("setpgid 1");
             exit(1);
         }
+                
+        fgPid = 0;
+        if (fg) {
+            fgPid = pid;
+            wait(&status);
+            jobDelete(pid);
+        }
+        //tcsetpgrp( 0, getpid());
         
-        printf("Fork pid: %d gpid %d\n", pid, getpgid(pid));
-
         if (cmd->next != NULL) {
             jobPipes(cmd->next, pf[0], gpid, fg);
         }

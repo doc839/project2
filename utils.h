@@ -16,6 +16,7 @@
  * the standard c library string functions
  */
 int myAtoi(char *s);
+char *myItoa( int i);
 int myStrLen(char *str);
 char *myStrCat( char *d, const char *s);
 char *myStrCpy(char *d, const char *s);
