@@ -38,26 +38,6 @@ struct cmdList *cmdsCurr;
 void createArgsList( char **args);
 void addArgsList( char **args);
 
-/*
- * Structure for simple job queue
- */
-struct jobList
-{
-    int job;
-    struct jobList *next;
-    struct jobList *prev;
-};
-
-struct jobList *jobHead;
-struct jobList *jobTail;
-
-void jobAdd( int job );
-void createJobsList( int job );
-struct jobList *jobFind( int job );
-int jobDelete( int job );
-void jobPrint();
-
-void myPipes(struct cmdList *cmd, int input, pid_t gprd, int fg);
 int shellError( int choice );
 
 

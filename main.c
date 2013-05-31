@@ -16,6 +16,7 @@
 #include "tokenizer.h"
 #include "utils.h"
 #include "global.h"
+#include "jobs.h"
 
 #define BUF_SIZE 5
 #define CMDSIZE 20
@@ -25,11 +26,32 @@ pid_t rtPid;
 
 void sigHandler( int signal ) {
     int status;
+    pid_t pid = waitpid(-1, &status, WNOHANG | WUNTRACED);
     
     printf("Caught signal %d\n", signal);
     if (signal == SIGCHLD ) {
-        rtPid = waitpid(-1, &status, WNOHANG | WUNTRACED);
-        printf("Child %d dead status: %d\n", rtPid, status);
+       // rtPid = waitpid(-1, &status, WNOHANG | WUNTRACED);
+        
+        if (status == 0) {
+            //tcsetpgrp( STDIN_FILENO, myShellGpid);
+            printf("Child %d dead status: %d\n", pid, status);
+            jobDelete(pid);
+            jobPrint();
+        }
+    }
+    
+    if (signal == SIGTSTP) {
+        
+        pid = jobHead->next->pid;
+        killpg( pid, SIGTSTP);
+        printf("Ctrl -Z pid: %d status: %d\n", pid, status);
+    }
+    
+    if (signal == 17 /*SIGUSR2*/) {
+        //pid = waitpid(-1, &status, WNOHANG | WUNTRACED);
+        jobDelete(rtPid);
+        printf("SIGUSR2 pid: %d status: %d\n", pid, status);
+        jobPrint();
     }
 }
 /*
@@ -57,11 +79,12 @@ int main(int argc, char** argv) {
     
     signal( SIGCHLD, sigHandler);
     signal( SIGINT, sigHandler);
+    signal( SIGTSTP, sigHandler);
     
     // set up shell
     // set the shell process group
     myShellGpid = getpgrp();
-    jobAdd(myShellGpid);
+    jobAdd(myShellGpid, "shell");
 /*
     if (setpgid( myShellGpid, myShellGpid) < 0 ) {
         perror("shell process group");
@@ -179,12 +202,12 @@ int main(int argc, char** argv) {
             savedStdOut = dup(1);  /* save stdout */
             dup2(rdStdOut, STDOUT_FILENO);
             close(rdStdOut);
-            myPipes(cmdPtr, rdStdIn, gpid, fg);
+            jobPipes(cmdPtr, rdStdIn, gpid, fg);
             dup2(savedStdOut, 1);
             close(savedStdOut);  /* restore stdout */
         } 
         else if (sErrorNo == 0 && stdOutFile == NULL) {
-            myPipes(cmdPtr, rdStdIn, gpid, fg);
+            jobPipes(cmdPtr, rdStdIn, gpid, fg);
         }
         
         /*
@@ -218,12 +241,15 @@ int main(int argc, char** argv) {
             rdStdOut = -1;
         }
         
+        printf("End of Program\n");
         jobPrint();
         
-        while (jobTail->prev != NULL)
-            jobDelete(jobTail->job);
+/*
+        while (jobTail->prev != NULL) 
+            jobDelete(jobTail->pid);
+*/
         
-        tcsetpgrp( STDIN_FILENO, myShellGpid);
+        //tcsetpgrp( STDIN_FILENO, myShellGpid);
         
     }
 
